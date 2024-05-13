@@ -1,0 +1,10 @@
+{
+  "editor.formatOnSave": true,
+  "editor.defaultFormatter": "trunk.io",
+  "trunk.enableWindows": true,
+  "files.insertFinalNewline": false,
+  "files.trimFinalNewlines": false,
+  "files.associations": {
+    "*.xbm": "cpp"
+  }
+}
