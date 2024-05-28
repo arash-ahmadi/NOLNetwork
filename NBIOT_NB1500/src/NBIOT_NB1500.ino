@@ -19,6 +19,8 @@
 #include "are_mqtt_config.h"
 #include "are_mqtt.h"
 #include <avr/dtostrf.h>
+#include <ArduinoMqttClient.h>
+#include <ArduinoJson.h>
 
 const char PINNUMBER[]     = SECRET_PINNUMBER;
 
@@ -38,28 +40,34 @@ Adafruit_SH1106G display = Adafruit_SH1106G(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, 
 #define DELTAY 2
 
 const int analogInPin = A0;  // Connect to Signal pin of 4913B TLE4913 Hall Effect Sensor
-const int threshold = 550;  // this is for 5V Power Supply
+const int threshold = 545;  // this is for 5V Power Supply
 
 boolean connected = false;
 // variables
 long lastMsg = 0; // time counter for MQTT intervalls
 int state = 1;
 float counter = 5.54;
-float counterInitial = counter;
+bool counterInitSet = false;
 int sensorValue = 0;
 int sensorValue_last = 0;
 bool sensor_high = false;
 bool sensor_rising = false;
 bool notify_serial = false;
 bool notify_mqtt = false;
+unsigned long notifyInterval = 10000; // 10 seconds in milliseconds
+unsigned long lastNotifyTime = 0;
+bool disconnectControl = false;
 char data[80];
 NBClient client;
 GPRS gprs;
 NB nbAccess;
 //MQTT settings
-
+MqttClient mqttClient(client);
 PubSubClient mqttclient(client);
-
+const char broker[] = MQTT_SERVER;
+int port = MQTT_PORT;
+const char topic[] = "gasmeter/main/init";
+const char topic2[] = "gasmeter/main/json/counter";
 /* MQTT callback
    This code sections reacts to incoming MQTT messages.
 */
@@ -257,6 +265,7 @@ void DisplayMQTTConnected(){
 void setup() {
 
   Serial.begin(9600);
+  
   delay(250); // wait for the OLED to power up
 
   display.begin(i2c_Address, true); // Address 0x3C default
@@ -273,6 +282,7 @@ void setup() {
   display.setTextColor(SH110X_WHITE);
   display.setCursor(0, 0);
   // display.println("aaConnected");
+  Serial.println("Starting...");
 
   //Connect to NETWORK ****************************************************
  
@@ -289,22 +299,154 @@ void setup() {
       delay(1000);
     }
   }
-  Serial.println("MQTT Connecting...");
+
+  Serial.print("Attempting to connect to the MQTT broker: ");
+  Serial.println(broker);
+  mqttClient.setUsernamePassword(MQTT_USER, MQTT_PASSWORD);
+  if (!mqttClient.connect(broker, port))
+  {
+    Serial.print("MQTT connection failed! Error code = ");
+    Serial.println(mqttClient.connectError());
+
+    while (1);
+  }
+
+  Serial.println("You're connected to the MQTT broker!");
+  Serial.println();
+
+  // set the message receive callback
+  mqttClient.onMessage(onMqttMessage);
+
+  Serial.print("Subscribing to topic: ");
+  Serial.println(topic);
+  Serial.println();
+
+  // subscribe to a topic
+  mqttClient.subscribe(topic);
+
+  // Serial.println("MQTT Connecting...");
 
  
-      //Connect to MQTT *******************************************************
-  mqttclient.setServer(MQTT_SERVER, MQTT_PORT);
-  mqttclient.setCallback(callback);
-      
-  }   
+  //     //Connect to MQTT *******************************************************
+  // mqttclient.setServer(MQTT_SERVER, MQTT_PORT);
+  // mqttclient.setCallback(callback);
 
+  // mqttclient.setCallback(messageReceived);
+  // mqttclient.subscribe("gasmeter/main/init");
+    }
 
+void onMqttMessage(int messageSize)
+{
+  // we received a message, print out the topic and contents
+  Serial.println("Received a message with topic '");
+  Serial.print(mqttClient.messageTopic());
+  Serial.print("', length ");
+  Serial.print(messageSize);
+  Serial.println(" bytes:");
+  if (mqttClient.messageTopic() = 'gasmeter/main/disconnect'){
+    std::string messageDisconnect = "";
+    while (mqttClient.available())
+    {
+      char c = (char)mqttClient.read();
+      messageDisconnect += c;
+    }
+    StaticJsonDocument<200> doc;
+
+    // // Parse the payload
+    DeserializationError error = deserializeJson(doc, messageDisconnect);
+
+    // // Check for errors in parsing
+    if (error)
+    {
+      Serial.println("Failed to parse JSON payload.");
+      return;
+    }
+
+    // // Extract the counterValueInit value
+    unsigned long disconnect = doc["disconnect"];
+
+    Serial.print("disconnect: ");
+    Serial.print(disconnect);
+    disconnectControl = disconnect;
+  }
+  if (mqttClient.messageTopic() = 'gasmeter/main/notifyInterval'){
+    std::string messageNotifyInterval = "";
+    while (mqttClient.available())
+    {
+      char c = (char)mqttClient.read();
+      messageNotifyInterval += c;
+    }
+    StaticJsonDocument<200> doc;
+
+    // // Parse the payload
+    DeserializationError error = deserializeJson(doc, messageNotifyInterval);
+
+    // // Check for errors in parsing
+    if (error)
+    {
+      Serial.println("Failed to parse JSON payload.");
+      return;
+    }
+
+    // // Extract the counterValueInit value
+    unsigned long interval = doc["interval"];
+
+    Serial.print("interval: ");
+    Serial.print(interval);
+    notifyInterval = interval;
+  }
+  if (mqttClient.messageTopic() = 'gasmeter/main/counterInit')
+  {
+    std::string message = "";
+    while (mqttClient.available())
+    {
+      char c = (char)mqttClient.read();
+      message += c;
+    }
+    StaticJsonDocument<200> doc;
+
+    // // Parse the payload
+    DeserializationError error = deserializeJson(doc, message);
+
+    // // Check for errors in parsing
+    if (error)
+    {
+      Serial.println("Failed to parse JSON payload.");
+      return;
+    }
+
+    // // Extract the counterValueInit value
+    float counterValueInit = doc["counterValueInit"];
+    unsigned long interval = doc["interval"];
+    bool disconnect = doc["disconnect"];
+
+    Serial.print("counterValueInit: ");
+    Serial.print(counterValueInit);
+    Serial.print("interval: ");
+    Serial.print(interval);
+    Serial.print("disconnect: ");
+    Serial.print(disconnect);
+    notifyInterval = interval;
+    if (counterInitSet == false)
+    {
+      counter = counterValueInit;
+      counterInitSet = true;
+    }
+    // Serial.print(counterFull);
+  }
+
+  // use the Stream interface to print the contents
+  // while (mqttClient.available())
+  // {
+  //   Serial.print((char)mqttClient.read());
+  // }
+  Serial.println();
+  Serial.println();
+}
 
 void loop() {
 
 
-
-  
   notify_serial = false;
   notify_mqtt = false;
   // read analog value:
@@ -317,10 +459,19 @@ void loop() {
    Serial.println(sensorValue);
    Serial.print("Voltage : ");
    Serial.println(voltage);
+
+  //  mqtt_check_connection(&mqttclient);
+  //  mqttclient.loop();
+   mqttClient.poll();
+
    delay(300);
-  
 
-
+   if (millis() - lastNotifyTime >= notifyInterval)
+   {
+     // If it has, set notify_mqtt to true and update lastNotifyTime
+     notify_mqtt = true;
+     lastNotifyTime = millis();
+   }
   //************ LOGIC FROM GITHUB FOR DETECTING PULSE ****************
   //  
   if (sensorValue < threshold)
@@ -342,7 +493,7 @@ void loop() {
   
     DisplayGasFlow();
     notify_serial = true;
-    notify_mqtt = true;
+    // notify_mqtt = true;
   }
 
   // register state 0 (magnetic counter detected)
@@ -369,7 +520,7 @@ void loop() {
   {
 
     // ensure connection to mqtt broker
-    mqtt_check_connection(&mqttclient);
+    // mqtt_check_connection(&mqttclient);
     
     // Convert sensor reading from float to a char array
     // char tempString[8];  // increase array length if having runtime errors
@@ -386,8 +537,11 @@ void loop() {
     // Send payload
     char attributes[100];
     payload.toCharArray( attributes, 100 );
-    mqttclient.publish( "gasmeter/main/json", attributes );
-    Serial.println( attributes );
+    mqttClient.beginMessage(topic2);
+    mqttClient.print(payload);
+    mqttClient.endMessage();
+    // mqttclient.publish( "gasmeter/main/json", attributes );
+    Serial.println("MQTT message sent");
   }
   delay(5);
 }

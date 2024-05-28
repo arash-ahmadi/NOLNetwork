@@ -4,8 +4,7 @@
  * Note: All messages are public!
  */
 
-
-#define MQTT_SERVER "mqtt.thingsboard.cloud"
+#define MQTT_SERVER "mqtt.energyclouds.com"
 #define MQTT_PORT 1883
 //#define MQTT_USER NULL --> Create this in credentials.h
 //#define MQTT_PASSWORD NULL --> Create this in credentials.h
