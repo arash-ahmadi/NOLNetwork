@@ -66,8 +66,10 @@ MqttClient mqttClient(client);
 PubSubClient mqttclient(client);
 const char broker[] = MQTT_SERVER;
 int port = MQTT_PORT;
-const char topic[] = "gasmeter/main/init";
-const char topic2[] = "gasmeter/main/json/counter";
+const char counterValueInitTopic[] = "gasmeter/000000000001/counterInit";
+const char notifyIntervalTopic[] = "gasmeter/000000000001/notifyInterval";
+const char disconnectControlTopic[] = "gasmeter/000000000001/disconnect";
+const char counterPublishTopic[] = "gasmeter/000000000001/json/counter";
 /* MQTT callback
    This code sections reacts to incoming MQTT messages.
 */
@@ -265,7 +267,10 @@ void DisplayMQTTConnected(){
 void setup() {
 
   Serial.begin(9600);
-  
+
+  // Set pin 10 as an output pin
+  pinMode(10, OUTPUT);
+
   delay(250); // wait for the OLED to power up
 
   display.begin(i2c_Address, true); // Address 0x3C default
@@ -318,11 +323,21 @@ void setup() {
   mqttClient.onMessage(onMqttMessage);
 
   Serial.print("Subscribing to topic: ");
-  Serial.println(topic);
+  Serial.println(notifyIntervalTopic);
+  Serial.println();
+
+  Serial.print("Subscribing to topic: ");
+  Serial.println(counterValueInitTopic);
+  Serial.println();
+
+  Serial.print("Subscribing to topic: ");
+  Serial.println(disconnectControlTopic);
   Serial.println();
 
   // subscribe to a topic
-  mqttClient.subscribe(topic);
+  mqttClient.subscribe(notifyIntervalTopic);
+  mqttClient.subscribe(counterValueInitTopic);
+  mqttClient.subscribe(disconnectControlTopic);
 
   // Serial.println("MQTT Connecting...");
 
@@ -343,7 +358,8 @@ void onMqttMessage(int messageSize)
   Serial.print("', length ");
   Serial.print(messageSize);
   Serial.println(" bytes:");
-  if (mqttClient.messageTopic() = 'gasmeter/main/disconnect'){
+  if (mqttClient.messageTopic() == disconnectControlTopic)
+  {
     std::string messageDisconnect = "";
     while (mqttClient.available())
     {
@@ -359,17 +375,19 @@ void onMqttMessage(int messageSize)
     if (error)
     {
       Serial.println("Failed to parse JSON payload.");
+      Serial.println(error.c_str());
       return;
     }
 
     // // Extract the counterValueInit value
-    unsigned long disconnect = doc["disconnect"];
+    bool disconnect = doc["disconnect"];
 
     Serial.print("disconnect: ");
     Serial.print(disconnect);
     disconnectControl = disconnect;
   }
-  if (mqttClient.messageTopic() = 'gasmeter/main/notifyInterval'){
+  if (mqttClient.messageTopic() == notifyIntervalTopic)
+  {
     std::string messageNotifyInterval = "";
     while (mqttClient.available())
     {
@@ -395,7 +413,7 @@ void onMqttMessage(int messageSize)
     Serial.print(interval);
     notifyInterval = interval;
   }
-  if (mqttClient.messageTopic() = 'gasmeter/main/counterInit')
+  if (mqttClient.messageTopic() == counterValueInitTopic)
   {
     std::string message = "";
     while (mqttClient.available())
@@ -417,16 +435,9 @@ void onMqttMessage(int messageSize)
 
     // // Extract the counterValueInit value
     float counterValueInit = doc["counterValueInit"];
-    unsigned long interval = doc["interval"];
-    bool disconnect = doc["disconnect"];
 
     Serial.print("counterValueInit: ");
     Serial.print(counterValueInit);
-    Serial.print("interval: ");
-    Serial.print(interval);
-    Serial.print("disconnect: ");
-    Serial.print(disconnect);
-    notifyInterval = interval;
     if (counterInitSet == false)
     {
       counter = counterValueInit;
@@ -466,11 +477,24 @@ void loop() {
 
    delay(300);
 
+  // Notify interval logic
    if (millis() - lastNotifyTime >= notifyInterval)
    {
      // If it has, set notify_mqtt to true and update lastNotifyTime
      notify_mqtt = true;
      lastNotifyTime = millis();
+   }
+
+   // Disconnect logic
+   if (disconnectControl)
+   {
+     // If disconnect is true, set pin 10 to HIGH
+     digitalWrite(10, HIGH);
+   }
+   else
+   {
+     // If disconnect is false, set pin 10 to LOW
+     digitalWrite(10, LOW);
    }
   //************ LOGIC FROM GITHUB FOR DETECTING PULSE ****************
   //  
@@ -537,7 +561,7 @@ void loop() {
     // Send payload
     char attributes[100];
     payload.toCharArray( attributes, 100 );
-    mqttClient.beginMessage(topic2);
+    mqttClient.beginMessage(counterPublishTopic);
     mqttClient.print(payload);
     mqttClient.endMessage();
     // mqttclient.publish( "gasmeter/main/json", attributes );
