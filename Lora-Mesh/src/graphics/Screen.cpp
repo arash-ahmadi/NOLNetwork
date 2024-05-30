@@ -251,10 +251,10 @@ static void drawWelcomeScreen(OLEDDisplay *display, OLEDDisplayUiState *state, i
 
     if ((millis() / 10000) % 2) {
         display->drawString(x, y + FONT_HEIGHT_SMALL * 2 - 3, "Set the region using the");
-        display->drawString(x, y + FONT_HEIGHT_SMALL * 3 - 3, "Meshtastic Android, iOS,");
+        display->drawString(x, y + FONT_HEIGHT_SMALL * 3 - 3, "NOL Android, iOS,");
         display->drawString(x, y + FONT_HEIGHT_SMALL * 4 - 3, "Web or CLI clients.");
     } else {
-        display->drawString(x, y + FONT_HEIGHT_SMALL * 2 - 3, "Visit meshtastic.org");
+        display->drawString(x, y + FONT_HEIGHT_SMALL * 2 - 3, "Visit nol.io");
         display->drawString(x, y + FONT_HEIGHT_SMALL * 3 - 3, "for more information.");
         display->drawString(x, y + FONT_HEIGHT_SMALL * 4 - 3, "");
     }
@@ -410,7 +410,7 @@ static void drawCriticalFaultFrame(OLEDDisplay *display, OLEDDisplayUiState *sta
     display->drawString(0 + x, 0 + y, tempBuf);
     display->setTextAlignment(TEXT_ALIGN_LEFT);
     display->setFont(FONT_SMALL);
-    display->drawString(0 + x, FONT_HEIGHT_MEDIUM + y, "For help, please visit \nmeshtastic.org");
+    display->drawString(0 + x, FONT_HEIGHT_MEDIUM + y, "For help, please visit \nnol.io");
 }
 
 // Ignore messages originating from phone (from the current node 0x0) unless range test or store and forward module are enabled
